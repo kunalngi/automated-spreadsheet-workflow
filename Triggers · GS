@@ -1,0 +1,69 @@
+/**
+ * Triggers.gs
+ * Manages time-driven and event-driven (installable) triggers.
+ */
+
+/**
+ * Sets up a daily trigger that runs the full workflow at ~6 AM.
+ * Safe to run multiple times — it removes any existing workflow
+ * trigger first so duplicates aren't created.
+ */
+function setUpDailyTrigger() {
+  removeTriggersFor_('runFullWorkflow');
+
+  ScriptApp.newTrigger('runFullWorkflow')
+    .timeBased()
+    .everyDays(1)
+    .atHour(6)
+    .inTimezone(CONFIG.TIMEZONE)
+    .create();
+
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    'Daily trigger scheduled for 6 AM.',
+    'Automation'
+  );
+}
+
+/**
+ * Installs an onFormSubmit trigger bound to this spreadsheet so
+ * new Google Form responses are automatically processed/validated.
+ * Run this once manually (menu-driven onEdit/onOpen triggers are
+ * simple triggers and can't call services like MailApp directly,
+ * so an installable trigger is used instead).
+ */
+function setUpFormSubmitTrigger() {
+  removeTriggersFor_('onFormSubmitHandler');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ScriptApp.newTrigger('onFormSubmitHandler')
+    .forSpreadsheet(ss)
+    .onFormSubmit()
+    .create();
+
+  SpreadsheetApp.getActiveSpreadsheet().toast('Form submit trigger installed.', 'Automation');
+}
+
+/**
+ * Removes every trigger owned by this script. Useful for cleanup
+ * or before re-configuring the schedule.
+ */
+function removeAllTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => ScriptApp.deleteTrigger(trigger));
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    `Removed ${triggers.length} trigger(s).`,
+    'Automation'
+  );
+}
+
+/**
+ * Helper: removes existing triggers that call a specific function,
+ * so re-running setup functions doesn't create duplicates.
+ */
+function removeTriggersFor_(functionName) {
+  ScriptApp.getProjectTriggers().forEach(trigger => {
+    if (trigger.getHandlerFunction() === functionName) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}
