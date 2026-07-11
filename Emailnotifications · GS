@@ -1,0 +1,41 @@
+/**
+ * EmailNotifications.gs
+ * Sends automated email notifications, optionally attaching a
+ * generated PDF report.
+ */
+
+/**
+ * Sends a summary email to CONFIG.REPORT_RECIPIENTS.
+ * If a Drive File (PDF) is passed in, it's attached to the email.
+ * Can also be run manually from the menu, in which case it
+ * generates a fresh report first.
+ */
+function sendEmailNotification(pdfFile) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dataSheet = getDataSheet_();
+  const rowCount = Math.max(dataSheet.getDataRange().getNumRows() - CONFIG.HEADER_ROW, 0);
+
+  const file = pdfFile || generateReport();
+
+  const dateStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+  const subject = `${CONFIG.EMAIL_SUBJECT_PREFIX} ${dateStr}`;
+  const body =
+    `Hi team,\n\n` +
+    `The automated spreadsheet workflow has completed successfully.\n\n` +
+    `Summary:\n` +
+    `- Rows processed: ${rowCount}\n` +
+    `- Spreadsheet: ${ss.getUrl()}\n\n` +
+    `The latest report is attached as a PDF.\n\n` +
+    `This is an automated message.`;
+
+  CONFIG.REPORT_RECIPIENTS.forEach(recipient => {
+    MailApp.sendEmail({
+      to: recipient,
+      subject: subject,
+      body: body,
+      attachments: [file.getAs(MimeType.PDF)],
+    });
+  });
+
+  SpreadsheetApp.getActiveSpreadsheet().toast('Email notification sent.', 'Automation');
+}
