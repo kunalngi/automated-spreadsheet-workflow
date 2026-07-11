@@ -1,0 +1,77 @@
+/**
+ * ReportGeneration.gs
+ * Builds a summary dashboard and exports the spreadsheet (or a
+ * specific sheet) as a PDF report saved to Google Drive.
+ */
+
+/**
+ * Refreshes a "Dashboard" sheet with quick summary stats
+ * derived from the data sheet (row count, last updated, etc).
+ * Extend this with your own metrics/charts as needed.
+ */
+function updateDashboard() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dataSheet = getDataSheet_();
+  let dashboard = ss.getSheetByName(CONFIG.DASHBOARD_SHEET_NAME);
+  if (!dashboard) {
+    dashboard = ss.insertSheet(CONFIG.DASHBOARD_SHEET_NAME);
+  }
+
+  const dataValues = dataSheet.getDataRange().getValues();
+  const rowCount = Math.max(dataValues.length - CONFIG.HEADER_ROW, 0);
+  const colCount = dataValues.length ? dataValues[0].length : 0;
+
+  dashboard.clearContents();
+  dashboard.getRange('A1').setValue('Automated Dashboard').setFontWeight('bold').setFontSize(14);
+  dashboard.getRange('A3').setValue('Metric');
+  dashboard.getRange('B3').setValue('Value');
+  dashboard.getRange('A3:B3').setFontWeight('bold');
+
+  const rows = [
+    ['Total Data Rows', rowCount],
+    ['Total Columns', colCount],
+    ['Last Updated', Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd HH:mm:ss')],
+  ];
+  dashboard.getRange(4, 1, rows.length, 2).setValues(rows);
+  dashboard.autoResizeColumns(1, 2);
+
+  SpreadsheetApp.getActiveSpreadsheet().toast('Dashboard updated.', 'Automation');
+}
+
+/**
+ * Exports the Dashboard sheet as a PDF and saves it to Drive
+ * (in CONFIG.REPORT_FOLDER_ID if set, otherwise root of My Drive).
+ * Returns the created DriveApp File object.
+ */
+function generateReport() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dashboard = ss.getSheetByName(CONFIG.DASHBOARD_SHEET_NAME) || getDataSheet_();
+
+  const url = ss.getUrl().replace(/edit$/, '');
+  const exportUrl =
+    `${url}export?exportFormat=pdf&format=pdf` +
+    `&gid=${dashboard.getSheetId()}` +
+    '&size=A4&portrait=true&fitw=true' +
+    '&sheetnames=false&printtitle=false&pagenumbers=false' +
+    '&gridlines=false&fzr=false';
+
+  const token = ScriptApp.getOAuthToken();
+  const response = UrlFetchApp.fetch(exportUrl, {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+
+  const dateStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+  const fileName = `Report_${dateStr}.pdf`;
+  const blob = response.getBlob().setName(fileName);
+
+  let folder;
+  if (CONFIG.REPORT_FOLDER_ID) {
+    folder = DriveApp.getFolderById(CONFIG.REPORT_FOLDER_ID);
+  } else {
+    folder = DriveApp.getRootFolder();
+  }
+
+  const file = folder.createFile(blob);
+  SpreadsheetApp.getActiveSpreadsheet().toast(`Report saved: ${fileName}`, 'Automation');
+  return file;
+}
