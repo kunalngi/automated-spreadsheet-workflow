@@ -1,0 +1,47 @@
+/**
+ * FormProcessing.gs
+ * Handles incoming Google Form responses: validates them and
+ * appends clean data into the main working data sheet.
+ *
+ * Requires the installable trigger set up via setUpFormSubmitTrigger()
+ * in Triggers.gs (onFormSubmit installable trigger, not the simple
+ * onFormSubmit trigger, so it can call MailApp/UrlFetchApp, etc).
+ */
+
+/**
+ * Triggered automatically when a linked Google Form is submitted.
+ * @param {Object} e - The form submit event object.
+ */
+function onFormSubmitHandler(e) {
+  try {
+    const namedValues = e.namedValues; // { "Question": ["Answer"], ... }
+    const dataSheet = getDataSheet_();
+
+    // Build a row in the same column order as the data sheet header.
+    const header = dataSheet
+      .getRange(CONFIG.HEADER_ROW, 1, 1, dataSheet.getLastColumn())
+      .getValues()[0];
+
+    const newRow = header.map(colName => {
+      const value = namedValues[colName];
+      return value ? value[0] : '';
+    });
+
+    // Basic validation: skip rows missing required fields.
+    const missingRequired = CONFIG.REQUIRED_COLUMNS.some(colIndex => {
+      const value = newRow[colIndex - 1];
+      return value === '' || value === null || value === undefined;
+    });
+
+    if (missingRequired) {
+      logRun_('WARNING', 'Form response skipped due to missing required fields.');
+      return;
+    }
+
+    dataSheet.appendRow(newRow);
+    logRun_('SUCCESS', 'Form response appended to data sheet.');
+  } catch (err) {
+    logRun_('ERROR', `Form processing failed: ${err.message}`);
+    notifyOnError_(err);
+  }
+}
